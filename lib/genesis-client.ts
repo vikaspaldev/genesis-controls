@@ -10,7 +10,7 @@ const BASE_URL = "https://www.genesisconnect.ca/tods/api";
  * Chrome/Edge on macOS UA string plus screen resolution.
  */
 const DEVICE_ID =
-  "TW96aWxsYS81LjAgKE1hY2ludG9zaDsgSW50ZWwgTWFjIE9TIFggMTBfMTVfNykgQXBwbGVXZWJLaXQvNTM3LjM2IChLSFRNTCwgbGlrZSBHZWNrbykgQ2hyb21lLzE1MC4wLjAuMCBTYWZhcmkvNTM3LjM2IEVkZ2UvMTUwLjAuMC4wK01hY0ludGVsKzM0NDAuMTQ0MA==";
+  "TW96aWxsYS81LjAgKE1hY2ludG9zaDsgSW50ZWwgTWFjIE9TIFggMTBfMTVfNykgQXBwbGVXZWJLaXQvNTM3LjM2IChLSFRNTCwgbGlrZSBHZWNrbykgQ2hyb21lLzE1MC4wLjAuMCBTYWZhcmkvNTM3LjM2IEVkZy8xNTAuMC4wLjArTWFjSW50ZWwrMzQ0MCsxNDQw";
 
 /** PIN-verification auth codes have a short server-side TTL; refresh proactively. */
 const AUTH_CODE_TTL_MS = 5 * 60 * 1000;
@@ -42,8 +42,8 @@ interface MyVehicleResponse {
 
 // ─── Errors ───────────────────────────────────────────────────────────────────
 
-export class GenesisConfigError extends Error {}
-export class GenesisAuthError extends Error {}
+export class GenesisConfigError extends Error { }
+export class GenesisAuthError extends Error { }
 export class GenesisApiError extends Error {
   constructor(
     message: string,
