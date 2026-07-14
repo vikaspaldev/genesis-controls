@@ -1,9 +1,6 @@
 import { json } from "../lib/response.js";
 
 // No auth — safe for uptime monitors / Google Home routines to probe liveness.
-export default async function handler(req: Request): Promise<Response> {
-  if (req.method !== "GET") {
-    return new Response(null, { status: 405, headers: { Allow: "GET" } });
-  }
+export async function GET(_req: Request): Promise<Response> {
   return json(200, { ok: true, ts: new Date().toISOString() });
 }
