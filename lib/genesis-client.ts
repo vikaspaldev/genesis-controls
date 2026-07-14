@@ -124,19 +124,13 @@ export class GenesisCarClient implements CarClient {
   }
 
   async lock(): Promise<{ ok: boolean; action: string }> {
-    throw new GenesisApiError(
-      "lock: endpoint not yet wired up for Genesis Canada web API",
-      501,
-      "",
-    );
+    await this.#vehicleRequest("/drlck", { pin: this.#pin });
+    return { ok: true, action: "lock" };
   }
 
   async unlock(): Promise<{ ok: boolean; action: string }> {
-    throw new GenesisApiError(
-      "unlock: endpoint not yet wired up for Genesis Canada web API",
-      501,
-      "",
-    );
+    await this.#vehicleRequest("/drulck", { pin: this.#pin });
+    return { ok: true, action: "unlock" };
   }
 
   async status(): Promise<CarStatus> {
