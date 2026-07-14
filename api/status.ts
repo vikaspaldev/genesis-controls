@@ -1,6 +1,6 @@
-import { getCarClient } from "../lib/car";
-import { methodGuard, withAuth } from "../lib/handler";
-import { json } from "../lib/response";
+import { getCarClient } from "../lib/car.js";
+import { methodGuard, withAuth } from "../lib/handler.js";
+import { json } from "../lib/response.js";
 
 export default withAuth(async (req: Request): Promise<Response> => {
   const guard = methodGuard(req, "GET");

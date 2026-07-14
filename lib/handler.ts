@@ -1,5 +1,5 @@
-import { AuthError, requireBearer } from "./auth";
-import { error } from "./response";
+import { AuthError, requireBearer } from "./auth.js";
+import { error } from "./response.js";
 
 type Handler = (req: Request) => Promise<Response>;
 

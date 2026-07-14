@@ -1,4 +1,4 @@
-import { json } from "../lib/response";
+import { json } from "../lib/response.js";
 
 // No auth — safe for uptime monitors / Google Home routines to probe liveness.
 export default async function handler(req: Request): Promise<Response> {
