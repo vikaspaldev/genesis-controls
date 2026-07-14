@@ -19,7 +19,11 @@
   "pnpm": {
     "allowedDeprecatedVersions": {},
     "onlyBuiltDependencies": [
-      "esbuild"
+      "esbuild",
+      "protobufjs"
     ]
+  },
+  "dependencies": {
+    "bluelinky": "^10.0.0"
   }
 }
