@@ -67,23 +67,20 @@ export class GenesisCarClient implements CarClient {
 
   async start(options?: StartOptions) {
     const durationMinutes = options?.durationMinutes ?? 10;
-    // Genesis web portal encodes cabin temperature as a hex string ("FEH" ≈ 22°C
-    // from the Postman capture). Until we reverse the full table, honor the
-    // capture default and ignore custom temperatures.
     await this.#vehicleRequest(
       "/rmtstrt",
       {
         setting: {
           airCtrl: 1,
-          defrost: true,
-          airTemp: { value: "FEH", unit: 0, hvacTempType: 1 },
-          heating1: 4,
+          defrost: false,
+          airTemp: { value: "10H", unit: 0, hvacTempType: 1 },
+          heating1: 0,
           igniOnDuration: durationMinutes,
           seatHeaterVentCMD: {
-            drvSeatOptCmd: 8,
-            astSeatOptCmd: 0,
-            rlSeatOptCmd: 0,
-            rrSeatOptCmd: 0,
+            drvSeatOptCmd: 5,
+            astSeatOptCmd: 2,
+            rlSeatOptCmd: 2,
+            rrSeatOptCmd: 2,
           },
           ims: 0,
           defaultFavorite: true,
