@@ -344,6 +344,7 @@ export class GenesisCarClient implements CarClient {
         429,
         "",
       );
+    }
 
     // Session expired — drop cached auth material.
     // Do NOT retry inline if vehicle-scoped headers (pauth) are present:
