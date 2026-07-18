@@ -125,9 +125,10 @@ let _client: CarClient | null = null;
  */
 export function getCarClient(): CarClient {
   if (!_client) {
-    _client = process.env.GENESIS_USERNAME
-      ? new GenesisCarClient()
-      : new StubCarClient();
+    _client =
+      process.env.GENESIS_USERNAME && process.env.GENESIS_DEVICE_ID
+        ? new GenesisCarClient()
+        : new StubCarClient();
   }
   return _client;
 }

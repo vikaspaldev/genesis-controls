@@ -179,9 +179,10 @@ export class GenesisCarClient implements CarClient {
     const ttlMs = ((res.result?.token?.expireIn ?? 86400) - 60) * 1000;
     this.#accessTokenExpiresAt = Date.now() + ttlMs;
     this.#refreshToken = res.result?.token?.refreshToken ?? null;
-    // Any stale auth code is tied to the previous session.
+    // Stale auth code and vehicle ID are tied to the previous session.
     this.#authCode = null;
     this.#authCodeExpiresAt = 0;
+    this.#vehicleId = null;
   }
 
   async #ensureAuthCode(forceRefresh = false): Promise<void> {
@@ -329,13 +330,26 @@ export class GenesisCarClient implements CarClient {
       );
     }
 
-    // Session expired — drop cached auth material and retry once.
+    // Session expired — drop cached auth material.
+    // Do NOT retry inline if vehicle-scoped headers (pauth) are present:
+    // those headers are stale too and need to be regenerated via #writeRequest.
+    // Clearing the cached token here means the next #writeRequest call will
+    // re-login, re-verify PIN, and retry cleanly.
     if (res.status === 401 && !opts._isRetry && !opts.skipAccessToken) {
       this.#accessToken = null;
       this.#accessTokenExpiresAt = 0;
       this.#refreshToken = null;
       this.#authCode = null;
       this.#authCodeExpiresAt = 0;
+      this.#vehicleId = null;
+      if (opts.extraHeaders?.pauth) {
+        // Stale pauth — propagate the 401 so the caller retries via #writeRequest.
+        throw new GenesisApiError(
+          "Session expired. Please retry the request.",
+          401,
+          "",
+        );
+      }
       return this.#httpJson<T>(path, { ...opts, _isRetry: true });
     }
 
