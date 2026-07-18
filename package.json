@@ -9,17 +9,27 @@
   "scripts": {
     "start": "vercel dev",
     "deploy": "vercel --prod",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "check": "tsc --noEmit && biome check .",
+    "prepare": "simple-git-hooks"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm typecheck && pnpm biome check ."
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.4",
     "@types/node": "^22.0.0",
+    "simple-git-hooks": "^2.13.1",
     "typescript": "^5.5.0",
     "vercel": "^56.0.0"
   },
   "pnpm": {
     "allowedDeprecatedVersions": {},
     "onlyBuiltDependencies": [
-      "esbuild"
+      "esbuild",
+      "simple-git-hooks"
     ]
   }
 }
