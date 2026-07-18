@@ -1,3 +1,5 @@
+import { GenesisCarClient } from "./genesis/index.js";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface StartOptions {
@@ -8,11 +10,46 @@ export interface StartOptions {
 }
 
 export interface CarStatus {
-  locked: boolean;
-  running: boolean;
-  odometer?: number;
-  fuelLevelPercent?: number;
-  batteryVoltage?: number;
+  // ─── Engine & locks ───────────────────────────────────────────────────────
+  running: boolean;             // engine on/off
+  remoteStart: boolean;         // started via remote ignition
+  locked: boolean;              // door lock state
+
+  // ─── Openings ─────────────────────────────────────────────────────────────
+  hood: boolean;                // hood open
+  trunk: boolean;               // trunk open
+  sunroof: boolean;             // sunroof open
+  doors: {
+    frontLeft: boolean;
+    frontRight: boolean;
+    rearLeft: boolean;
+    rearRight: boolean;
+  };
+
+  // ─── Climate ──────────────────────────────────────────────────────────────
+  climate: boolean;             // A/C or heat active
+  defrost: boolean;             // front defrost active
+
+  // ─── Fuel & range ─────────────────────────────────────────────────────────
+  fuelLevelPercent: number;     // 0–100
+  rangeKm: number;              // estimated range in km
+
+  // ─── 12 V battery ─────────────────────────────────────────────────────────
+  batteryPercent: number;       // battery.batSoc (0–100)
+
+  // ─── Warnings ─────────────────────────────────────────────────────────────
+  warnings: {
+    lowFuel: boolean;
+    tirePressure: boolean;
+    smartKeyBattery: boolean;
+    washerFluid: boolean;
+    brakeOil: boolean;
+    engineOil: boolean;
+  };
+
+  // ─── Meta ─────────────────────────────────────────────────────────────────
+  /** Raw timestamp from Genesis portal, format "YYYYMMDDHHmmss" */
+  lastUpdated: string;
 }
 
 export interface CarClient {
@@ -23,7 +60,7 @@ export interface CarClient {
   status(): Promise<CarStatus>;
 }
 
-// ─── Stub (active until bluelinky is wired up) ───────────────────────────────
+// ─── Stub (used when GENESIS_USERNAME is not set) ────────────────────────────
 
 export class StubCarClient implements CarClient {
   async start(options?: StartOptions) {
@@ -48,7 +85,29 @@ export class StubCarClient implements CarClient {
 
   async status(): Promise<CarStatus> {
     console.log("[StubCarClient] status");
-    return { locked: true, running: false };
+    return {
+      running: false,
+      remoteStart: false,
+      locked: true,
+      hood: false,
+      trunk: false,
+      sunroof: false,
+      doors: { frontLeft: false, frontRight: false, rearLeft: false, rearRight: false },
+      climate: false,
+      defrost: false,
+      fuelLevelPercent: 75,
+      rangeKm: 400,
+      batteryPercent: 75,
+      warnings: {
+        lowFuel: false,
+        tirePressure: false,
+        smartKeyBattery: false,
+        washerFluid: false,
+        brakeOil: false,
+        engineOil: false,
+      },
+      lastUpdated: new Date().toISOString(),
+    };
   }
 }
 
@@ -58,28 +117,18 @@ let _client: CarClient | null = null;
 
 /**
  * Returns the module-scoped CarClient singleton.
- * The singleton is created once per warm worker, so the real client's
- * login/session overhead is paid only on cold starts.
+ * The singleton is created once per warm worker so login/PIN-verify
+ * overhead is paid only on cold starts.
  *
- * HOW TO SWAP IN GENESIS (when you're ready):
- *
- *   1. pnpm add bluelinky
- *   2. Create a BluelinkyCarClient class that wraps BlueLinky:
- *        const client = new BlueLinky({
- *          username: process.env.GENESIS_USERNAME,
- *          password: process.env.GENESIS_PASSWORD,
- *          pin:      process.env.GENESIS_PIN,
- *          brand:    'hyundai',   // Genesis Canada uses the HMG/Hyundai backend
- *          region:   'CA',
- *        });
- *   3. Await the 'ready' event and store the BlueLinky vehicle reference.
- *   4. Add GENESIS_* vars to your Vercel project environment variables.
- *   5. Replace `new StubCarClient()` below with `new BluelinkyCarClient()`.
- *      None of the api/ endpoint files need to change.
+ * Uses GenesisCarClient (native Genesis Canada web API) when GENESIS_USERNAME
+ * is set; otherwise falls back to StubCarClient for local dev.
  */
 export function getCarClient(): CarClient {
   if (!_client) {
-    _client = new StubCarClient();
+    _client =
+      process.env.GENESIS_USERNAME && process.env.GENESIS_DEVICE_ID
+        ? new GenesisCarClient()
+        : new StubCarClient();
   }
   return _client;
 }

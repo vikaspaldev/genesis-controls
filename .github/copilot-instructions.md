@@ -20,7 +20,7 @@ Before doing **any** analysis, code generation, or review:
 - **Runtime**: Node.js 22 + Vercel Hobby (Fluid Compute)
 - **Package manager**: `pnpm`
 - **Auth**: `Authorization: Bearer token on all endpoints except `/api/health`
-- **Current car backend**: `StubCarClient` (mock) — real calls go through `bluelinky` once configured
+- **Current car backend**: `GenesisCarClient` (real, native web-portal client). Falls back to `StubCarClient` when `GENESIS_USERNAME` env var is unset.
 
 ---
 
@@ -94,15 +94,11 @@ pnpm deploy        # vercel --prod
 
 ---
 
-## Swapping in the real Genesis client (bluelinky)
+## Genesis Connected Services (Canada)
 
-See `lib/car.ts` for full instructions and `README.md` for the complete `BluelinkyCarClient` implementation. The short version:
+Real car calls go through `GenesisCarClient` in [lib/genesis/client.ts](../lib/genesis/client.ts), a native client for the `genesisconnect.ca/tods/api` web portal. `getCarClient()` auto-selects it whenever `GENESIS_USERNAME` is set; otherwise it returns `StubCarClient`.
 
-```bash
-pnpm add bluelinky
-```
-
-Then implement `BluelinkyCarClient` and replace `new StubCarClient()` in `lib/car.ts`.
+Do **not** reintroduce `bluelinky` — it targets the mobile app API which is not accessible for this account.
 
 ---
 
