@@ -96,7 +96,7 @@ pnpm deploy        # vercel --prod
 
 ## Genesis Connected Services (Canada)
 
-Real car calls go through `GenesisCarClient` in [lib/genesis-client.ts](../lib/genesis-client.ts), a native client for the `genesisconnect.ca/tods/api` web portal. `getCarClient()` auto-selects it whenever `GENESIS_USERNAME` is set; otherwise it returns `StubCarClient`.
+Real car calls go through `GenesisCarClient` in [lib/genesis/client.ts](../lib/genesis/client.ts), a native client for the `genesisconnect.ca/tods/api` web portal. `getCarClient()` auto-selects it whenever `GENESIS_USERNAME` is set; otherwise it returns `StubCarClient`.
 
 Do **not** reintroduce `bluelinky` — it targets the mobile app API which is not accessible for this account.
 

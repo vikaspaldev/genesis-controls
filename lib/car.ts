@@ -1,4 +1,4 @@
-import { GenesisCarClient } from "./genesis-client.js";
+import { GenesisCarClient } from "./genesis/index.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

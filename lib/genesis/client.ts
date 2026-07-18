@@ -1,61 +1,32 @@
-import type { CarClient, CarStatus, StartOptions } from "./car.js";
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const BASE_URL = "https://www.genesisconnect.ca/tods/api";
+import type { CarClient, CarStatus, StartOptions } from "../car.js";
+import { AUTH_CODE_TTL_MS, BASE_URL, DEVICE_ID } from "./constants.js";
+import {
+  GenesisApiError,
+  GenesisAuthError,
+  GenesisConfigError,
+} from "./errors.js";
+import type {
+  LoginResponse,
+  MyVehicleResponse,
+  VerifyPinResponse,
+} from "./types.js";
 
 /**
- * Base64-encoded browser fingerprint the Genesis web portal requires on every
- * request. Reused verbatim from the working Postman collection — decodes to a
- * Chrome/Edge on macOS UA string plus screen resolution.
+ * Native HTTP client for the Genesis Connected Services web portal
+ * (`genesisconnect.ca/tods/api`).
+ *
+ * Speaks the browser-portal protocol end-to-end:
+ *   1. `POST /v2/login`      → cached `accessToken`
+ *   2. `POST /vrfypin`       → cached `pAuth` (TTL configurable)
+ *   3. `POST /v2/myvehicle`  → cached `vehicleId` (with env override)
+ *   4. `POST /rmtstrt` / `/rmtstp` / `/drlck` / `/drulck`  → vehicle commands
+ *
+ * Concurrency: parallel calls into any handshake step share a single in-flight
+ * Promise, so a burst of requests only triggers one login/verify/lookup.
+ *
+ * Session refresh: any downstream 401 clears cached auth material and retries
+ * the request exactly once.
  */
-const DEVICE_ID =
-  "TW96aWxsYS81LjAgKE1hY2ludG9zaDsgSW50ZWwgTWFjIE9TIFggMTBfMTVfNykgQXBwbGVXZWJLaXQvNTM3LjM2IChLSFRNTCwgbGlrZSBHZWNrbykgQ2hyb21lLzE1MC4wLjAuMCBTYWZhcmkvNTM3LjM2IEVkZy8xNTAuMC4wLjArTWFjSW50ZWwrMzQ0MCsxNDQw";
-
-/** PIN-verification auth codes have a short server-side TTL; refresh proactively. */
-const AUTH_CODE_TTL_MS = 5 * 60 * 1000;
-
-// ─── Response type shapes (only the fields we consume) ────────────────────────
-
-interface LoginResponse {
-  result?: {
-    token?: {
-      accessToken?: string;
-      refreshToken?: string;
-    };
-  };
-}
-
-interface VerifyPinResponse {
-  result?: {
-    pAuth?: string;
-  };
-}
-
-interface MyVehicleResponse {
-  result?: {
-    vehicles?: Array<{ vehicleId?: string; nickName?: string }>;
-    // some payloads use a flat `vehicleId` — tolerate both
-    vehicleId?: string;
-  };
-}
-
-// ─── Errors ───────────────────────────────────────────────────────────────────
-
-export class GenesisConfigError extends Error { }
-export class GenesisAuthError extends Error { }
-export class GenesisApiError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-    readonly body: string,
-  ) {
-    super(message);
-  }
-}
-
-// ─── Client ───────────────────────────────────────────────────────────────────
-
 export class GenesisCarClient implements CarClient {
   readonly #username: string;
   readonly #password: string;
@@ -67,8 +38,7 @@ export class GenesisCarClient implements CarClient {
   #authCodeExpiresAt = 0;
   #vehicleId: string | null = null;
 
-  // Serialize concurrent login / pin-verify / vehicle-lookup requests so
-  // several parallel API calls don't all trigger the same handshake.
+  // Serialize concurrent handshake requests.
   #loginInFlight: Promise<void> | null = null;
   #authCodeInFlight: Promise<void> | null = null;
   #vehicleIdInFlight: Promise<void> | null = null;
@@ -97,38 +67,46 @@ export class GenesisCarClient implements CarClient {
     // Genesis web portal encodes cabin temperature as a hex string ("FEH" ≈ 22°C
     // from the Postman capture). Until we reverse the full table, honor the
     // capture default and ignore custom temperatures.
-    await this.#vehicleRequest("/rmtstrt", {
-      setting: {
-        airCtrl: 1,
-        defrost: true,
-        airTemp: { value: "FEH", unit: 0, hvacTempType: 1 },
-        heating1: 4,
-        igniOnDuration: durationMinutes,
-        seatHeaterVentCMD: {
-          drvSeatOptCmd: 8,
-          astSeatOptCmd: 0,
-          rlSeatOptCmd: 0,
-          rrSeatOptCmd: 0,
+    await this.#vehicleRequest(
+      "/rmtstrt",
+      {
+        setting: {
+          airCtrl: 1,
+          defrost: true,
+          airTemp: { value: "FEH", unit: 0, hvacTempType: 1 },
+          heating1: 4,
+          igniOnDuration: durationMinutes,
+          seatHeaterVentCMD: {
+            drvSeatOptCmd: 8,
+            astSeatOptCmd: 0,
+            rlSeatOptCmd: 0,
+            rrSeatOptCmd: 0,
+          },
+          ims: 0,
+          defaultFavorite: true,
         },
-        ims: 0,
-        defaultFavorite: true,
+        pin: this.#pin,
       },
-      pin: this.#pin,
-    });
+      { forceRefreshAuthCode: true },
+    );
     return { ok: true, action: "start" };
   }
 
   async stop() {
-    await this.#vehicleRequest("/rmtstp", { pin: this.#pin });
+    await this.#vehicleRequest(
+      "/rmtstp",
+      { pin: this.#pin },
+      { forceRefreshAuthCode: true },
+    );
     return { ok: true, action: "stop" };
   }
 
-  async lock(): Promise<{ ok: boolean; action: string }> {
+  async lock() {
     await this.#vehicleRequest("/drlck", { pin: this.#pin });
     return { ok: true, action: "lock" };
   }
 
-  async unlock(): Promise<{ ok: boolean; action: string }> {
+  async unlock() {
     await this.#vehicleRequest("/drulck", { pin: this.#pin });
     return { ok: true, action: "unlock" };
   }
@@ -136,7 +114,7 @@ export class GenesisCarClient implements CarClient {
   async status(): Promise<CarStatus> {
     // The Postman capture only exposes `myvehicle` (registration data) and
     // `rmtsts` (transaction status). Neither returns real-time lock/engine
-    // state, so we can only surface a limited shape here.
+    // state, so we can only surface a placeholder shape here.
     await this.#ensureVehicleId();
     return { locked: false, running: false };
   }
@@ -159,7 +137,9 @@ export class GenesisCarClient implements CarClient {
     });
     const token = res.result?.token?.accessToken;
     if (!token) {
-      throw new GenesisAuthError("Login response did not include an accessToken.");
+      throw new GenesisAuthError(
+        "Login response did not include an accessToken.",
+      );
     }
     this.#accessToken = token;
     // Any stale auth code / vehicle id is tied to the previous session.
@@ -167,8 +147,20 @@ export class GenesisCarClient implements CarClient {
     this.#authCodeExpiresAt = 0;
   }
 
-  async #ensureAuthCode(): Promise<void> {
-    if (this.#authCode && Date.now() < this.#authCodeExpiresAt) return;
+  async #ensureAuthCode(forceRefresh = false): Promise<void> {
+    if (
+      !forceRefresh &&
+      this.#authCode &&
+      Date.now() < this.#authCodeExpiresAt
+    ) {
+      return;
+    }
+    if (forceRefresh) {
+      // Invalidate the cache so a concurrent non-forcing caller doesn't reuse
+      // it while we're in the middle of refreshing.
+      this.#authCode = null;
+      this.#authCodeExpiresAt = 0;
+    }
     this.#authCodeInFlight ??= this.#verifyPin().finally(() => {
       this.#authCodeInFlight = null;
     });
@@ -223,9 +215,10 @@ export class GenesisCarClient implements CarClient {
   async #vehicleRequest<T = unknown>(
     path: string,
     body: unknown,
+    opts: { forceRefreshAuthCode?: boolean } = {},
   ): Promise<T> {
     await this.#ensureAccessToken();
-    await this.#ensureAuthCode();
+    await this.#ensureAuthCode(opts.forceRefreshAuthCode);
     await this.#ensureVehicleId();
     return this.#httpJson<T>(path, {
       method: "POST",
