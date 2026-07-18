@@ -9,8 +9,8 @@ import {
 import type {
   LoginResponse,
   MyVehicleResponse,
-  VerifyPinResponse,
   VehicleStatusResponse,
+  VerifyPinResponse,
 } from "./types.js";
 
 /**
@@ -68,7 +68,7 @@ export class GenesisCarClient implements CarClient {
 
   async start(options?: StartOptions) {
     const durationMinutes = options?.durationMinutes ?? 10;
-    await this.#vehicleRequest(
+    await this.#writeRequest(
       "/rmtstrt",
       {
         setting: {
@@ -94,7 +94,7 @@ export class GenesisCarClient implements CarClient {
   }
 
   async stop() {
-    await this.#vehicleRequest(
+    await this.#writeRequest(
       "/rmtstp",
       { pin: this.#pin },
       { forceRefreshAuthCode: true },
@@ -103,22 +103,17 @@ export class GenesisCarClient implements CarClient {
   }
 
   async lock() {
-    await this.#vehicleRequest("/drlck", { pin: this.#pin });
+    await this.#writeRequest("/drlck", { pin: this.#pin });
     return { ok: true, action: "lock" };
   }
 
   async unlock() {
-    await this.#vehicleRequest("/drulck", { pin: this.#pin });
+    await this.#writeRequest("/drulck", { pin: this.#pin });
     return { ok: true, action: "unlock" };
   }
 
   async status(): Promise<CarStatus> {
-    await this.#ensureAccessToken();
-    await this.#ensureVehicleId();
-    const res = await this.#httpJson<VehicleStatusResponse>("/rltmvhclsts", {
-      method: "POST",
-      extraHeaders: { vehicleid: this.#vehicleId! },
-    });
+    const res = await this.#readRequest<VehicleStatusResponse>("/rltmvhclsts");
     const s = res.result?.status;
     return {
       // ─── Engine & locks
@@ -244,9 +239,27 @@ export class GenesisCarClient implements CarClient {
     this.#vehicleId = vehicleId;
   }
 
-  // ─── Vehicle-scoped request (adds pauth + vehicleid headers) ──────────────
+  // ─── Vehicle-scoped helpers: read (status) vs write (commands) ──────────
 
-  async #vehicleRequest<T = unknown>(
+  /**
+   * Read-only vehicle request — requires `accessToken` + `vehicleId`.
+   * Does NOT verify the PIN. Use for status/info queries.
+   */
+  async #readRequest<T = unknown>(path: string, body?: unknown): Promise<T> {
+    await this.#ensureAccessToken();
+    await this.#ensureVehicleId();
+    return this.#httpJson<T>(path, {
+      method: "POST",
+      body,
+      extraHeaders: { vehicleid: this.#vehicleId! },
+    });
+  }
+
+  /**
+   * Write (command) vehicle request — requires `accessToken` + `vehicleId`
+   * + a freshly verified `pAuth` code. Use for start/stop/lock/unlock.
+   */
+  async #writeRequest<T = unknown>(
     path: string,
     body: unknown,
     opts: { forceRefreshAuthCode?: boolean } = {},
