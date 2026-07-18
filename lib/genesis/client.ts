@@ -156,7 +156,12 @@ export class GenesisCarClient implements CarClient {
   // ─── Auth handshake ────────────────────────────────────────────────────────
 
   async #ensureAccessToken(): Promise<void> {
-    if (this.#accessToken && Date.now() < this.#accessTokenExpiresAt) return;
+    if (this.#accessToken && Date.now() < this.#accessTokenExpiresAt) {
+      console.log("[genesis] accessToken: cache hit, expires in",
+        Math.round((this.#accessTokenExpiresAt - Date.now()) / 1000), "s");
+      return;
+    }
+    console.log("[genesis] accessToken: cache miss → logging in");
     await this.#loginFlight.run(() => this.#login());
   }
 
@@ -179,6 +184,8 @@ export class GenesisCarClient implements CarClient {
     const ttlMs = ((res.result?.token?.expireIn ?? 86400) - 60) * 1000;
     this.#accessTokenExpiresAt = Date.now() + ttlMs;
     this.#refreshToken = res.result?.token?.refreshToken ?? null;
+    console.log("[genesis] login OK — token valid for",
+      Math.round(ttlMs / 1000), "s");
     // Stale auth code and vehicle ID are tied to the previous session.
     this.#authCode = null;
     this.#authCodeExpiresAt = 0;
@@ -191,8 +198,15 @@ export class GenesisCarClient implements CarClient {
       this.#authCode &&
       Date.now() < this.#authCodeExpiresAt
     ) {
+      console.log("[genesis] authCode: cache hit, expires in",
+        Math.round((this.#authCodeExpiresAt - Date.now()) / 1000), "s");
       return;
     }
+    console.log(
+      forceRefresh
+        ? "[genesis] authCode: forced refresh → verifying PIN"
+        : "[genesis] authCode: cache miss → verifying PIN"
+    );
     if (forceRefresh) {
       // Invalidate the cache so a concurrent non-forcing caller doesn't reuse
       // it while we're in the middle of refreshing.
@@ -214,14 +228,21 @@ export class GenesisCarClient implements CarClient {
     }
     this.#authCode = authCode;
     this.#authCodeExpiresAt = Date.now() + AUTH_CODE_TTL_MS;
+    console.log("[genesis] PIN verified OK — authCode valid for",
+      Math.round(AUTH_CODE_TTL_MS / 1000), "s");
   }
 
   async #ensureVehicleId(): Promise<void> {
     if (this.#vehicleIdOverride) {
       this.#vehicleId = this.#vehicleIdOverride;
+      console.log("[genesis] vehicleId: using env override");
       return;
     }
-    if (this.#vehicleId) return;
+    if (this.#vehicleId) {
+      console.log("[genesis] vehicleId: cache hit");
+      return;
+    }
+    console.log("[genesis] vehicleId: cache miss → fetching from myvehicle");
     await this.#vehicleIdFlight.run(() => this.#fetchVehicleId());
   }
 
@@ -292,6 +313,7 @@ export class GenesisCarClient implements CarClient {
       _isRetry?: boolean;
     },
   ): Promise<T> {
+    console.log(`[genesis] → ${opts.method} ${path}`);
     const headers: Record<string, string> = {
       ...BROWSER_HEADERS,
       "Content-Type": "application/json;charset=UTF-8",
@@ -310,6 +332,7 @@ export class GenesisCarClient implements CarClient {
       headers,
       body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
     });
+    console.log(`[genesis] ← ${res.status} ${path}`);
 
     // Rate-limited by Cloudflare — throw immediately with a human-readable
     // retry time so the caller knows exactly when to try again.
