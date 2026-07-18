@@ -2,10 +2,10 @@ export { GenesisCarClient } from "./client.js";
 export {
   GenesisApiError,
   GenesisAuthError,
-  GenesisConfigError,
+  GenesisConfigError
 } from "./errors.js";
 export type {
   LoginResponse,
   MyVehicleResponse,
-  VerifyPinResponse,
+  VerifyPinResponse
 } from "./types.js";

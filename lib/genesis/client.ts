@@ -1,4 +1,5 @@
 import type { CarClient, CarStatus, StartOptions } from "../car.js";
+import { SingleFlight } from "../single-flight.js";
 import { AUTH_CODE_TTL_MS, BASE_URL, DEVICE_ID } from "./constants.js";
 import {
   GenesisApiError,
@@ -39,9 +40,9 @@ export class GenesisCarClient implements CarClient {
   #vehicleId: string | null = null;
 
   // Serialize concurrent handshake requests.
-  #loginInFlight: Promise<void> | null = null;
-  #authCodeInFlight: Promise<void> | null = null;
-  #vehicleIdInFlight: Promise<void> | null = null;
+  readonly #loginFlight = new SingleFlight();
+  readonly #authCodeFlight = new SingleFlight();
+  readonly #vehicleIdFlight = new SingleFlight();
 
   constructor() {
     const username = process.env.GENESIS_USERNAME;
@@ -123,10 +124,7 @@ export class GenesisCarClient implements CarClient {
 
   async #ensureAccessToken(): Promise<void> {
     if (this.#accessToken) return;
-    this.#loginInFlight ??= this.#login().finally(() => {
-      this.#loginInFlight = null;
-    });
-    await this.#loginInFlight;
+    await this.#loginFlight.run(() => this.#login());
   }
 
   async #login(): Promise<void> {
@@ -161,10 +159,7 @@ export class GenesisCarClient implements CarClient {
       this.#authCode = null;
       this.#authCodeExpiresAt = 0;
     }
-    this.#authCodeInFlight ??= this.#verifyPin().finally(() => {
-      this.#authCodeInFlight = null;
-    });
-    await this.#authCodeInFlight;
+    await this.#authCodeFlight.run(() => this.#verifyPin());
   }
 
   async #verifyPin(): Promise<void> {
@@ -187,10 +182,7 @@ export class GenesisCarClient implements CarClient {
       return;
     }
     if (this.#vehicleId) return;
-    this.#vehicleIdInFlight ??= this.#fetchVehicleId().finally(() => {
-      this.#vehicleIdInFlight = null;
-    });
-    await this.#vehicleIdInFlight;
+    await this.#vehicleIdFlight.run(() => this.#fetchVehicleId());
   }
 
   async #fetchVehicleId(): Promise<void> {
