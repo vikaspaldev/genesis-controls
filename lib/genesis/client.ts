@@ -339,19 +339,11 @@ export class GenesisCarClient implements CarClient {
     if (res.status === 429) {
       const retryAfter = res.headers.get("Retry-After");
       const waitSeconds = retryAfter ? Number.parseInt(retryAfter, 10) : 60;
-      const retryAt = new Date(Date.now() + waitSeconds * 1000);
-      const retryTime = retryAt.toLocaleTimeString("en-CA", {
-        hour: "numeric",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: true,
-      });
       throw new GenesisApiError(
-        `Rate limited by Cloudflare. Retry after ${retryTime}.`,
+        `Rate limited by Cloudflare. Retry after ${waitSeconds}s.`,
         429,
         "",
       );
-    }
 
     // Session expired — drop cached auth material.
     // Do NOT retry inline if vehicle-scoped headers (pauth) are present:
