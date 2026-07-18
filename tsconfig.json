@@ -4,17 +4,13 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "lib": [
-      "ES2022"
-    ],
-    "types": [
-      "node"
-    ]
+    "lib": ["ES2022"],
+    "types": ["node"]
   },
-  "include": [
-    "api/**/*.ts",
-    "lib/**/*.ts"
-  ]
+  "include": ["api/**/*.ts", "lib/**/*.ts"]
 }
