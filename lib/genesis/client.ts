@@ -35,6 +35,8 @@ export class GenesisCarClient implements CarClient {
   readonly #vehicleIdOverride: string | undefined;
 
   #accessToken: string | null = null;
+  #accessTokenExpiresAt = 0;
+  #refreshToken: string | null = null;
   #authCode: string | null = null;
   #authCodeExpiresAt = 0;
   #vehicleId: string | null = null;
@@ -123,7 +125,7 @@ export class GenesisCarClient implements CarClient {
   // ─── Auth handshake ────────────────────────────────────────────────────────
 
   async #ensureAccessToken(): Promise<void> {
-    if (this.#accessToken) return;
+    if (this.#accessToken && Date.now() < this.#accessTokenExpiresAt) return;
     await this.#loginFlight.run(() => this.#login());
   }
 
@@ -140,7 +142,12 @@ export class GenesisCarClient implements CarClient {
       );
     }
     this.#accessToken = token;
-    // Any stale auth code / vehicle id is tied to the previous session.
+    // Treat the server-supplied lifetime (seconds) as the TTL, minus a 60-second
+    // buffer so we never hand an about-to-expire token to the next request.
+    const ttlMs = ((res.result?.token?.expireIn ?? 86400) - 60) * 1000;
+    this.#accessTokenExpiresAt = Date.now() + ttlMs;
+    this.#refreshToken = res.result?.token?.refreshToken ?? null;
+    // Any stale auth code is tied to the previous session.
     this.#authCode = null;
     this.#authCodeExpiresAt = 0;
   }
@@ -255,6 +262,8 @@ export class GenesisCarClient implements CarClient {
     // Session expired — drop cached auth material and retry once.
     if (res.status === 401 && !opts._isRetry && !opts.skipAccessToken) {
       this.#accessToken = null;
+      this.#accessTokenExpiresAt = 0;
+      this.#refreshToken = null;
       this.#authCode = null;
       this.#authCodeExpiresAt = 0;
       return this.#httpJson<T>(path, { ...opts, _isRetry: true });

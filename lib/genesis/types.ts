@@ -13,6 +13,10 @@ export interface LoginResponse {
     token?: {
       accessToken?: string;
       refreshToken?: string;
+      /** Lifetime of the access token in **seconds** (e.g. 86400 = 24 h). */
+      expireIn?: number;
+      tokenType?: string;
+      scope?: string[];
     };
   };
 }
