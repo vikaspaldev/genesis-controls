@@ -6,17 +6,48 @@
  * behavior matches what has been verified against the real service.
  */
 
-export const BASE_URL = "https://www.genesisconnect.ca/tods/api";
+/** Env override: `GENESIS_BASE_URL` */
+export const BASE_URL =
+  process.env.GENESIS_BASE_URL ?? "https://www.genesisconnect.ca/tods/api";
+
+/** Derived from BASE_URL — used for Origin / Referer headers. */
+export const ORIGIN = new URL(BASE_URL).origin;
 
 /**
- * Base64-encoded browser fingerprint the Genesis web portal requires on every
- * request. Decodes to a Chrome/Edge on macOS UA string plus screen resolution.
+ * The UA string embedded in DEVICE_ID, used as the actual HTTP User-Agent.
+ * Cloudflare blocks requests without a recognisable browser UA.
  *
- * Env override: `GENESIS_DEVICE_ID`
+ * Env override: `GENESIS_USER_AGENT`
  */
-export const DEVICE_ID =
-  process.env.GENESIS_DEVICE_ID ??
-  "TW96aWxsYS81LjAgKE1hY2ludG9zaDsgSW50ZWwgTWFjIE9TIFggMTBfMTVfNykgQXBwbGVXZWJLaXQvNTM3LjM2IChLSFRNTCwgbGlrZSBHZWNrbykgQ2hyb21lLzE1MC4wLjAuMCBTYWZhcmkvNTM3LjM2IEVkZy8xNTAuMC4wLjArTWFjSW50ZWwrMzQ0MCsxNDQw";
+export const USER_AGENT =
+  process.env.GENESIS_USER_AGENT ??
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0";
+
+/**
+ * Static browser security headers required by Cloudflare to pass bot detection.
+ * Values mirror the working browser session captured in curl.
+ */
+export const BROWSER_HEADERS: Record<string, string> = {
+  "User-Agent": USER_AGENT,
+  Accept: "application/json, text/plain, */*",
+  "Accept-Language": "en-US,en;q=0.9",
+  DNT: "1",
+  Priority: "u=1, i",
+  "sec-ch-ua": '"Not;A=Brand";v="8", "Chromium";v="150", "Microsoft Edge";v="150"',
+  "sec-ch-ua-mobile": "?0",
+  "sec-ch-ua-platform": '"macOS"',
+  "sec-fetch-dest": "empty",
+  "sec-fetch-mode": "cors",
+  "sec-fetch-site": "same-origin",
+  Origin: ORIGIN,
+};
+
+/**
+ * Base64-encoded browser fingerprint sent as the `Deviceid` header.
+ * Required — must be set via `GENESIS_DEVICE_ID` env var.
+ * Decodes to a browser UA string + screen resolution used by the web portal.
+ */
+export const DEVICE_ID: string | undefined = process.env.GENESIS_DEVICE_ID;
 
 /**
  * PIN-verification `pAuth` codes have a short server-side TTL. Cached codes

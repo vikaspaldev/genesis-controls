@@ -1,6 +1,6 @@
 import type { CarClient, CarStatus, StartOptions } from "../car.js";
 import { SingleFlight } from "../single-flight.js";
-import { AUTH_CODE_TTL_MS, BASE_URL, DEVICE_ID } from "./constants.js";
+import { AUTH_CODE_TTL_MS, BASE_URL, BROWSER_HEADERS, DEVICE_ID, ORIGIN } from "./constants.js";
 import {
   GenesisApiError,
   GenesisAuthError,
@@ -51,10 +51,11 @@ export class GenesisCarClient implements CarClient {
     const username = process.env.GENESIS_USERNAME;
     const password = process.env.GENESIS_PASSWORD;
     const pin = process.env.GENESIS_PIN;
+    const deviceId = process.env.GENESIS_DEVICE_ID;
 
-    if (!username || !password || !pin) {
+    if (!username || !password || !pin || !deviceId) {
       throw new GenesisConfigError(
-        "GENESIS_USERNAME, GENESIS_PASSWORD, and GENESIS_PIN must all be set.",
+        "GENESIS_USERNAME, GENESIS_PASSWORD, GENESIS_PIN, and GENESIS_DEVICE_ID must all be set.",
       );
     }
 
@@ -163,6 +164,7 @@ export class GenesisCarClient implements CarClient {
     const res = await this.#httpJson<LoginResponse>("/v2/login", {
       method: "POST",
       skipAccessToken: true,
+      extraHeaders: { Referer: `${ORIGIN}/login` },
       body: { loginId: this.#username, password: this.#password },
     });
     const token = res.result?.token?.accessToken;
@@ -277,7 +279,7 @@ export class GenesisCarClient implements CarClient {
     });
   }
 
-  // ─── Low-level HTTP with retry-on-401 ─────────────────────────────────────
+  // ─── Low-level HTTP with retry-on-401 and retry-on-429 ──────────────────
 
   async #httpJson<T>(
     path: string,
@@ -290,11 +292,12 @@ export class GenesisCarClient implements CarClient {
     },
   ): Promise<T> {
     const headers: Record<string, string> = {
-      "Content-Type": "application/json",
+      ...BROWSER_HEADERS,
+      "Content-Type": "application/json;charset=UTF-8",
       From: "CWP",
       Language: "0",
       Offset: "-4",
-      Deviceid: DEVICE_ID,
+      Deviceid: DEVICE_ID!, // validated as set in constructor
       ...opts.extraHeaders,
     };
     if (!opts.skipAccessToken && this.#accessToken) {
@@ -306,6 +309,25 @@ export class GenesisCarClient implements CarClient {
       headers,
       body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
     });
+
+    // Rate-limited by Cloudflare — throw immediately with a human-readable
+    // retry time so the caller knows exactly when to try again.
+    if (res.status === 429) {
+      const retryAfter = res.headers.get("Retry-After");
+      const waitSeconds = retryAfter ? Number.parseInt(retryAfter, 10) : 60;
+      const retryAt = new Date(Date.now() + waitSeconds * 1000);
+      const retryTime = retryAt.toLocaleTimeString("en-CA", {
+        hour: "numeric",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+      });
+      throw new GenesisApiError(
+        `Rate limited by Cloudflare. Retry after ${retryTime}.`,
+        429,
+        "",
+      );
+    }
 
     // Session expired — drop cached auth material and retry once.
     if (res.status === 401 && !opts._isRetry && !opts.skipAccessToken) {
