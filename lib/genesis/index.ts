@@ -7,5 +7,6 @@ export {
 export type {
   LoginResponse,
   MyVehicleResponse,
-  VerifyPinResponse
+  VerifyPinResponse,
+  VehicleStatusResponse,
 } from "./types.js";

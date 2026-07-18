@@ -10,6 +10,7 @@ import type {
   LoginResponse,
   MyVehicleResponse,
   VerifyPinResponse,
+  VehicleStatusResponse,
 } from "./types.js";
 
 /**
@@ -112,11 +113,48 @@ export class GenesisCarClient implements CarClient {
   }
 
   async status(): Promise<CarStatus> {
-    // The Postman capture only exposes `myvehicle` (registration data) and
-    // `rmtsts` (transaction status). Neither returns real-time lock/engine
-    // state, so we can only surface a placeholder shape here.
+    await this.#ensureAccessToken();
     await this.#ensureVehicleId();
-    return { locked: false, running: false };
+    const res = await this.#httpJson<VehicleStatusResponse>("/rltmvhclsts", {
+      method: "POST",
+      extraHeaders: { vehicleid: this.#vehicleId! },
+    });
+    const s = res.result?.status;
+    return {
+      // ─── Engine & locks
+      running: s?.engine ?? false,
+      remoteStart: s?.remoteIgnition ?? false,
+      locked: s?.doorLock ?? false,
+      // ─── Openings
+      hood: s?.hoodOpen ?? false,
+      trunk: s?.trunkOpen ?? false,
+      sunroof: s?.sunroofOpen ?? false,
+      doors: {
+        frontLeft: (s?.doorOpen?.frontLeft ?? 0) !== 0,
+        frontRight: (s?.doorOpen?.frontRight ?? 0) !== 0,
+        rearLeft: (s?.doorOpen?.backLeft ?? 0) !== 0,
+        rearRight: (s?.doorOpen?.backRight ?? 0) !== 0,
+      },
+      // ─── Climate
+      climate: s?.airCtrlOn ?? false,
+      defrost: s?.defrost ?? false,
+      // ─── Fuel & range
+      fuelLevelPercent: s?.fuelLevel ?? 0,
+      rangeKm: s?.dte?.value ?? 0,
+      // ─── Battery
+      batteryPercent: s?.battery?.batSoc ?? 0,
+      // ─── Warnings
+      warnings: {
+        lowFuel: s?.lowFuelLight ?? false,
+        tirePressure: (s?.tirePressureLamp?.tirePressureLampAll ?? 0) !== 0,
+        smartKeyBattery: s?.smartKeyBatteryWarning ?? false,
+        washerFluid: s?.washerFluidStatus ?? false,
+        brakeOil: s?.breakOilStatus ?? false,
+        engineOil: s?.engineOilStatus ?? false,
+      },
+      // ─── Meta
+      lastUpdated: s?.lastStatusDate ?? "",
+    };
   }
 
   // ─── Auth handshake ────────────────────────────────────────────────────────

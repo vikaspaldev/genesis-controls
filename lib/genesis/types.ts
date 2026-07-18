@@ -34,3 +34,35 @@ export interface MyVehicleResponse {
     vehicleId?: string;
   };
 }
+
+export interface VehicleStatusResponse {
+  result?: {
+    status?: {
+      lastStatusDate?: string;
+      engine?: boolean;
+      remoteIgnition?: boolean;
+      doorLock?: boolean;
+      doorOpen?: {
+        frontLeft?: number;
+        frontRight?: number;
+        backLeft?: number;
+        backRight?: number;
+      };
+      hoodOpen?: boolean;
+      trunkOpen?: boolean;
+      sunroofOpen?: boolean;
+      airCtrlOn?: boolean;
+      defrost?: boolean;
+      fuelLevel?: number;
+      dte?: { value?: number; unit?: number };
+      battery?: { batSoc?: number };
+      lowFuelLight?: boolean;
+      tirePressureLamp?: { tirePressureLampAll?: number };
+      smartKeyBatteryWarning?: boolean;
+      washerFluidStatus?: boolean;
+      /** Note: Genesis API uses "break" (sic) instead of "brake". */
+      breakOilStatus?: boolean;
+      engineOilStatus?: boolean;
+    };
+  };
+}

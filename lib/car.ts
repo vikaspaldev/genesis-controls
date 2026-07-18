@@ -10,11 +10,46 @@ export interface StartOptions {
 }
 
 export interface CarStatus {
-  locked: boolean;
-  running: boolean;
-  odometer?: number;
-  fuelLevelPercent?: number;
-  batteryVoltage?: number;
+  // ─── Engine & locks ───────────────────────────────────────────────────────
+  running: boolean;             // engine on/off
+  remoteStart: boolean;         // started via remote ignition
+  locked: boolean;              // door lock state
+
+  // ─── Openings ─────────────────────────────────────────────────────────────
+  hood: boolean;                // hood open
+  trunk: boolean;               // trunk open
+  sunroof: boolean;             // sunroof open
+  doors: {
+    frontLeft: boolean;
+    frontRight: boolean;
+    rearLeft: boolean;
+    rearRight: boolean;
+  };
+
+  // ─── Climate ──────────────────────────────────────────────────────────────
+  climate: boolean;             // A/C or heat active
+  defrost: boolean;             // front defrost active
+
+  // ─── Fuel & range ─────────────────────────────────────────────────────────
+  fuelLevelPercent: number;     // 0–100
+  rangeKm: number;              // estimated range in km
+
+  // ─── 12 V battery ─────────────────────────────────────────────────────────
+  batteryPercent: number;       // battery.batSoc (0–100)
+
+  // ─── Warnings ─────────────────────────────────────────────────────────────
+  warnings: {
+    lowFuel: boolean;
+    tirePressure: boolean;
+    smartKeyBattery: boolean;
+    washerFluid: boolean;
+    brakeOil: boolean;
+    engineOil: boolean;
+  };
+
+  // ─── Meta ─────────────────────────────────────────────────────────────────
+  /** Raw timestamp from Genesis portal, format "YYYYMMDDHHmmss" */
+  lastUpdated: string;
 }
 
 export interface CarClient {
@@ -50,7 +85,29 @@ export class StubCarClient implements CarClient {
 
   async status(): Promise<CarStatus> {
     console.log("[StubCarClient] status");
-    return { locked: true, running: false };
+    return {
+      running: false,
+      remoteStart: false,
+      locked: true,
+      hood: false,
+      trunk: false,
+      sunroof: false,
+      doors: { frontLeft: false, frontRight: false, rearLeft: false, rearRight: false },
+      climate: false,
+      defrost: false,
+      fuelLevelPercent: 75,
+      rangeKm: 400,
+      batteryPercent: 75,
+      warnings: {
+        lowFuel: false,
+        tirePressure: false,
+        smartKeyBattery: false,
+        washerFluid: false,
+        brakeOil: false,
+        engineOil: false,
+      },
+      lastUpdated: new Date().toISOString(),
+    };
   }
 }
 
